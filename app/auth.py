@@ -1,14 +1,14 @@
 """CP3 — Xác thực bằng API key.
 
-Public URL = ai cũng gọi được. Không có lớp này, hóa đơn LLM của bạn do
-người lạ quyết định.
+Endpoint công khai cần kiểm tra quyền truy cập trước khi
+cho phép gọi LLM hoặc sử dụng tài nguyên của service.
 """
 
 from __future__ import annotations
 
 import secrets
 
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException
 
 from .config import get_settings
 
@@ -19,19 +19,31 @@ def verify_api_key(
     x_api_key: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None),
 ) -> str:
-    """Kiểm tra header ``X-API-Key``; trả về user_id nếu hợp lệ.
+    """Kiểm tra header X-API-Key; trả về user_id nếu hợp lệ.
 
     TODO (CP3):
-      1. Lấy khóa đúng từ ``get_settings().agent_api_key``.
-      2. Nếu ``x_api_key`` là None hoặc không khớp → raise
-         ``HTTPException(status_code=401, detail="invalid or missing API key")``.
-      3. So sánh bằng ``secrets.compare_digest(a, b)``, **không dùng** ``==``.
-         Toán tử ``==`` dừng ngay tại ký tự đầu khác nhau, nên thời gian trả
-         lời rò rỉ thông tin về khóa (timing attack). ``compare_digest`` luôn
-         chạy hết chuỗi.
-      4. Hợp lệ → trả về ``x_user_id`` nếu client có gửi, ngược lại trả
-         ``ANONYMOUS_USER``. user_id này là đơn vị để rate limit và tính chi phí.
+      1. Lấy khóa đúng từ get_settings().agent_api_key.
+      2. Thiếu khóa hoặc sai khóa: trả HTTP 401.
+      3. So sánh bằng secrets.compare_digest.
+      4. Hợp lệ: trả x_user_id nếu có, ngược lại anonymous.
 
-    Gợi ý: dùng ``status.HTTP_401_UNAUTHORIZED`` cho dễ đọc.
+    compare_digest được thiết kế để giảm rò rỉ thông tin
+    thời gian khi so sánh secret.
+
+    Trong bài lab, X-User-Id do client cung cấp và được dùng
+    làm đơn vị tính rate limit, lịch sử và chi phí.
+    Đây chưa phải cơ chế xác minh danh tính người dùng.
     """
-    raise NotImplementedError("TODO (CP3): cài đặt verify_api_key")
+
+    expected = get_settings().agent_api_key
+
+    if x_api_key is None or not secrets.compare_digest(
+        x_api_key.encode(),
+        expected.encode(),
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="invalid or missing API key",
+        )
+
+    return x_user_id or ANONYMOUS_USER

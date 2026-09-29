@@ -1,9 +1,12 @@
 """CP4 — Stateless: state sống ngoài process.
 
-Nếu lịch sử hội thoại nằm trong một dict trong RAM, thì khi scale lên 3
-instance, user hỏi câu 1 vào instance A và câu 2 vào instance B sẽ thấy agent
-"mất trí nhớ". Container còn bị restart bất cứ lúc nào. Vì vậy state phải
-nằm ở nơi mọi instance cùng nhìn thấy: Redis.
+Nếu lưu lịch sử hội thoại trong dict Python, mỗi instance
+sẽ có một bản dữ liệu riêng.
+
+Khi request đầu vào instance A nhưng request tiếp theo vào
+instance B, người dùng có thể bị mất lịch sử.
+
+Redis là nơi lưu dữ liệu dùng chung giữa các instance.
 """
 
 from __future__ import annotations
@@ -19,18 +22,29 @@ HISTORY_TTL_SECONDS = 7 * 24 * 3600
 
 
 def get_redis_client(url: str | None = None):
-    """CHO SẴN — tạo client Redis từ URL.
+    """Tạo client Redis từ URL.
 
-    ``fake://`` trả về Redis giả chạy trong RAM, dùng khi máy bạn chưa có
-    Docker. Tiện cho lúc học, nhưng KHÔNG dùng khi deploy: nó vẫn là state
-    trong process, đúng cái mà CP4 đang tìm cách loại bỏ.
+    fake:// trả về Redis giả chạy trong RAM, phục vụ học
+    và chạy thử khi chưa có Redis thật.
+
+    Không dùng fake:// để triển khai nhiều instance:
+    dữ liệu vẫn nằm trong process và không được chia sẻ.
     """
+
     url = url or get_settings().redis_url
+
     if url.startswith("fake://"):
         import fakeredis
 
         return fakeredis.FakeRedis(decode_responses=True)
-    return redis.from_url(url, decode_responses=True)
+
+    # Timeout giúp readiness không chờ vô hạn khi Redis lỗi.
+    return redis.from_url(
+        url,
+        decode_responses=True,
+        socket_connect_timeout=3,
+        socket_timeout=3,
+    )
 
 
 class ConversationStore:
@@ -41,39 +55,65 @@ class ConversationStore:
 
     @staticmethod
     def _key(user_id: str) -> str:
-        """CHO SẴN."""
+        """CHO SẴN — key lịch sử riêng cho từng user."""
         return f"history:{user_id}"
 
     def ping(self) -> bool:
-        """Redis có trả lời không? Dùng cho endpoint /ready.
-
-        TODO (CP4): gọi ``self.client.ping()`` trong try/except.
-        Trả ``True`` nếu thành công, ``False`` nếu có bất kỳ Exception nào
-        (mất mạng, sai mật khẩu, Redis chưa khởi động...).
-        """
-        raise NotImplementedError("TODO (CP4): cài đặt ping")
-
-    def append(self, user_id: str, role: str, content: str) -> None:
-        """Ghi thêm một lượt vào lịch sử.
+        """Redis có phản hồi không? Dùng cho /ready.
 
         TODO (CP4):
-          1. ``self.client.rpush(key, json.dumps({"role": role, "content": content},
-             ensure_ascii=False))``
-          2. ``self.client.ltrim(key, -HISTORY_MAX_MESSAGES, -1)`` — chỉ giữ
-             ``HISTORY_MAX_MESSAGES`` message gần nhất, nếu không prompt sẽ
-             phình vô hạn và tiền token cũng vậy.
-          3. ``self.client.expire(key, HISTORY_TTL_SECONDS)`` — hội thoại cũ
-             tự hết hạn, khỏi phải dọn tay.
+          1. Gọi client.ping() trong try/except.
+          2. Thành công: trả True.
+          3. Mất kết nối hoặc lỗi khác: trả False.
+
+        Không để exception kết nối Redis thoát khỏi hàm.
         """
-        raise NotImplementedError("TODO (CP4): cài đặt append")
+
+        try:
+            return bool(self.client.ping())
+        except Exception:
+            return False
+
+    def append(
+        self,
+        user_id: str,
+        role: str,
+        content: str,
+    ) -> None:
+        """Ghi thêm một message vào lịch sử.
+
+        TODO (CP4):
+          1. Chuyển message thành JSON và RPUSH vào list.
+          2. LTRIM để chỉ giữ các message mới nhất.
+          3. EXPIRE để hội thoại cũ tự hết hạn.
+
+        Giới hạn lịch sử giúp tránh prompt tăng vô hạn.
+        """
+
+        key = self._key(user_id)
+
+        message = json.dumps(
+            {"role": role, "content": content},
+            ensure_ascii=False,
+        )
+
+        with self.client.pipeline(transaction=True) as pipe:
+            pipe.rpush(key, message)
+            pipe.ltrim(key, -HISTORY_MAX_MESSAGES, -1)
+            pipe.expire(key, HISTORY_TTL_SECONDS)
+            pipe.execute()
 
     def get_history(self, user_id: str) -> list[dict]:
-        """Đọc lịch sử hội thoại, cũ nhất trước.
+        """Đọc lịch sử theo thứ tự cũ nhất trước.
 
-        TODO (CP4): ``self.client.lrange(key, 0, -1)`` rồi ``json.loads``
-        từng phần tử. Chưa có gì → trả về list rỗng.
+        TODO (CP4):
+          1. LRANGE từ 0 đến -1 để đọc toàn bộ list.
+          2. json.loads từng message.
+          3. Chưa có lịch sử: trả list rỗng.
         """
-        raise NotImplementedError("TODO (CP4): cài đặt get_history")
+
+        items = self.client.lrange(self._key(user_id), 0, -1)
+        return [json.loads(item) for item in items]
 
     def clear(self, user_id: str) -> None:
         """CHO SẴN — xóa lịch sử của một user."""

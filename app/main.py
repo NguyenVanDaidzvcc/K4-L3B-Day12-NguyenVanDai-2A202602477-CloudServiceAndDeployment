@@ -1,14 +1,14 @@
-"""Agent service — điểm ráp nối của cả lab (CP1, CP3, CP4).
+"""Agent service — điểm ráp nối của cả lab: CP1, CP3, CP4.
 
-Luồng một request tới /ask:
-
-    client ──► verify_api_key ──► rate_limiter ──► cost_guard
-                                                       │
-                              store.get_history ◄──────┘
-                                       │
-                                    ask_llm
-                                       │
-                              store.append × 2 ──► cost_guard.record ──► log_event
+Luồng xử lý một request /ask:
+    1. Xác thực API key.
+    2. Kiểm tra rate limit.
+    3. Kiểm tra ngân sách.
+    4. Đọc lịch sử từ store.
+    5. Gọi mock LLM.
+    6. Lưu câu hỏi và câu trả lời.
+    7. Ghi nhận chi phí.
+    8. Ghi log và trả response.
 """
 
 from __future__ import annotations
@@ -34,11 +34,12 @@ SERVICE_NAME = "day12-agent"
 SERVICE_VERSION = "1.0.0"
 
 
-# ─────────────────────────────────────────────────────────────
-# Providers — CHO SẴN
-# Tách ra thành hàm để test có thể thay bằng Redis giả qua
-# app.dependency_overrides, và để kết nối Redis chỉ tạo khi thật sự cần.
-# ─────────────────────────────────────────────────────────────
+# Providers:
+# Tách dependency thành hàm để bộ test có thể thay bằng Redis giả
+# thông qua app.dependency_overrides.
+# Cache object để không tạo lại provider ở mỗi request.
+
+
 @lru_cache(maxsize=1)
 def get_store() -> ConversationStore:
     return ConversationStore(get_redis_client())
@@ -46,48 +47,94 @@ def get_store() -> ConversationStore:
 
 @lru_cache(maxsize=1)
 def get_rate_limiter() -> RateLimiter:
-    return RateLimiter(get_redis_client(), get_settings().rate_limit_per_minute)
+    return RateLimiter(
+        get_redis_client(),
+        get_settings().rate_limit_per_minute,
+    )
 
 
 @lru_cache(maxsize=1)
 def get_cost_guard() -> CostGuard:
-    return CostGuard(get_redis_client(), get_settings().monthly_budget_usd)
+    return CostGuard(
+        get_redis_client(),
+        get_settings().monthly_budget_usd,
+    )
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """CHO SẴN — chạy lúc app khởi động và lúc tắt."""
+    """Chạy khi ứng dụng khởi động và khi tắt.
+
+    get_settings() được gọi trước yield để thiếu API key
+    sẽ làm startup thất bại ngay, không chờ request đầu tiên.
+    """
+
+    get_settings()
+
+    lifecycle.shutting_down = False
     lifecycle.install()
-    log_event("service_started", service=SERVICE_NAME, version=SERVICE_VERSION)
-    yield
-    log_event("service_stopped", service=SERVICE_NAME)
+
+    log_event(
+        "service_started",
+        service=SERVICE_NAME,
+        version=SERVICE_VERSION,
+    )
+
+    try:
+        yield
+    finally:
+        lifecycle.shutting_down = True
+        lifecycle.restore()
+
+        log_event(
+            "service_stopped",
+            service=SERVICE_NAME,
+        )
 
 
-app = FastAPI(title="Day 12 Production Agent", version=SERVICE_VERSION, lifespan=lifespan)
+app = FastAPI(
+    title="Day 12 Production Agent",
+    version=SERVICE_VERSION,
+    lifespan=lifespan,
+)
 
 
 class AskRequest(BaseModel):
+    """Dữ liệu đầu vào cho endpoint /ask.
+
+    Câu hỏi phải có ít nhất 1 ký tự, tối đa 2000 ký tự.
+    """
+
     question: str = Field(min_length=1, max_length=2000)
 
 
-# ─────────────────────────────────────────────────────────────
-# Health & readiness
-# ─────────────────────────────────────────────────────────────
+# Health và readiness.
+
+
 @app.get("/health")
 def health():
     """Liveness probe — process còn sống không?
 
     TODO (CP1 + CP4):
-      - Đang tắt dần (``lifecycle.shutting_down``) → trả
-        ``JSONResponse(status_code=503, content={"status": "shutting_down"})``
-      - Bình thường → ``{"status": "ok", "service": SERVICE_NAME,
-        "version": SERVICE_VERSION}`` (mặc định FastAPI trả 200).
+      - Bình thường: trả 200 với status, service, version.
+      - Đang shutdown: trả 503 với status shutting_down.
 
-    Endpoint này phải **nhẹ**: không gọi Redis, không query DB. Nó chỉ trả
-    lời câu hỏi "có cần restart container này không?". Nếu nó phụ thuộc
-    Redis, Redis chết một nhịp là cả cụm container bị restart theo.
+    Endpoint này phải nhẹ và không gọi Redis hoặc database.
+    Nếu liveness phụ thuộc Redis, sự cố Redis có thể khiến
+    orchestrator restart những process vẫn đang hoạt động.
     """
-    raise NotImplementedError("TODO (CP1/CP4): cài đặt /health")
+
+    if lifecycle.shutting_down:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "shutting_down"},
+        )
+
+    return {
+        "status": "ok",
+        "service": SERVICE_NAME,
+        "version": SERVICE_VERSION,
+    }
 
 
 @app.get("/ready")
@@ -95,19 +142,39 @@ def ready(store: ConversationStore = Depends(get_store)):
     """Readiness probe — đã sẵn sàng nhận traffic chưa?
 
     TODO (CP4):
-      - Đang tắt dần → 503 ``{"status": "shutting_down"}``
-      - ``store.ping()`` False → 503 ``{"status": "not ready", "redis": False}``
-      - Ngược lại → ``{"status": "ready", "redis": True}``
+      - Đang shutdown: trả 503.
+      - Redis không phản hồi: trả 503.
+      - Redis hoạt động: trả 200.
 
-    Khác /health ở chỗ: endpoint này ĐƯỢC PHÉP kiểm tra dependency. Load
-    balancer dùng nó để quyết định có đẩy request vào instance này không.
+    Khác /health, endpoint này kiểm tra dependency.
+    Hệ thống định tuyến có thể dùng readiness để quyết định
+    có gửi traffic vào instance hay không.
     """
-    raise NotImplementedError("TODO (CP4): cài đặt /ready")
+
+    if lifecycle.shutting_down:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "shutting_down"},
+        )
+
+    if not store.ping():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not ready",
+                "redis": False,
+            },
+        )
+
+    return {
+        "status": "ready",
+        "redis": True,
+    }
 
 
-# ─────────────────────────────────────────────────────────────
-# Endpoint chính
-# ─────────────────────────────────────────────────────────────
+# Endpoint chính.
+
+
 @app.post("/ask")
 def ask(
     payload: AskRequest,
@@ -118,38 +185,73 @@ def ask(
 ):
     """Hỏi agent một câu.
 
-    TODO (CP3 + CP4) — làm ĐÚNG THỨ TỰ sau:
-      1. ``limiter.check(user_id)``           → 429 nếu gọi quá nhanh
-      2. ``guard.check(user_id)``             → 402 nếu hết ngân sách
-      3. ``history = store.get_history(user_id)``
-      4. ``result = ask_llm(payload.question, history)``
-      5. ``store.append(user_id, "user", payload.question)`` và
-         ``store.append(user_id, "assistant", result["answer"])``
-      6. ``guard.record(user_id, result["cost_usd"])``
-      7. ``log_event("ask_completed", user_id=user_id,
-         tokens_in=result["tokens_in"], tokens_out=result["tokens_out"],
-         cost_usd=result["cost_usd"])``
-      8. trả về::
+    TODO (CP3 + CP4) — thực hiện đúng thứ tự:
+      1. limiter.check(user_id): 429 nếu vượt hạn mức.
+      2. guard.check(user_id): 402 nếu vượt ngân sách.
+      3. store.get_history(user_id).
+      4. ask_llm(payload.question, history).
+      5. Lưu message user và assistant.
+      6. guard.record() để cộng chi phí.
+      7. log_event() ghi token và chi phí.
+      8. Trả answer, user_id, history_length, cost_usd, tokens.
 
-            {
-                "answer": result["answer"],
-                "user_id": user_id,
-                "history_length": len(history),
-                "cost_usd": result["cost_usd"],
-                "tokens": {"in": result["tokens_in"], "out": result["tokens_out"]},
-            }
+    Kiểm tra trước khi gọi LLM vì chi phí phát sinh
+    ở bước gọi model. Chặn sau khi gọi không tránh được phí.
 
-    Vì sao check trước rồi mới gọi LLM? Vì tiền mất ở bước gọi LLM. Chặn sau
-    khi đã gọi thì bạn vừa trả tiền vừa trả lỗi.
-
-    ``user_id`` do ``verify_api_key`` trả về, nên request không có API key
-    hợp lệ sẽ dừng ở 401 trước khi chạm vào bất cứ dòng nào ở đây.
+    Dependency verify_api_key sẽ trả 401 nếu khóa không hợp lệ,
+    trước khi chạy phần thân endpoint này.
     """
-    raise NotImplementedError("TODO (CP3/CP4): cài đặt /ask")
+
+    if lifecycle.shutting_down:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "shutting_down"},
+        )
+
+    # Kiểm tra hạn mức trước khi gọi LLM.
+    limiter.check(user_id)
+    guard.check(user_id)
+
+    # Đọc lịch sử trước khi thêm lượt hỏi mới.
+    history = store.get_history(user_id)
+
+    # Bài lab dùng mock LLM, không cần OpenAI API key.
+    result = ask_llm(payload.question, history)
+
+    # Lưu cả câu hỏi và câu trả lời.
+    store.append(user_id, "user", payload.question)
+    store.append(user_id, "assistant", result["answer"])
+
+    # Ghi nhận chi phí sau khi có kết quả.
+    guard.record(user_id, result["cost_usd"])
+
+    log_event(
+        "ask_completed",
+        user_id=user_id,
+        tokens_in=result["tokens_in"],
+        tokens_out=result["tokens_out"],
+        cost_usd=result["cost_usd"],
+    )
+
+    return {
+        "answer": result["answer"],
+        "user_id": user_id,
+        "history_length": len(history),
+        "cost_usd": result["cost_usd"],
+        "tokens": {
+            "in": result["tokens_in"],
+            "out": result["tokens_out"],
+        },
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
 
     settings = get_settings()
-    uvicorn.run(app, host="0.0.0.0", port=settings.port)
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=settings.port,
+    )
