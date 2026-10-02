@@ -1,0 +1,58 @@
+﻿2026/10/02 09:39:12 http2: server: error reading preface from client //./pipe/docker_engine: file has already been closed
+#0 building with "default" instance using docker driver
+System.Management.Automation.RemoteException
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.17kB 0.0s done
+#1 DONE 0.0s
+System.Management.Automation.RemoteException
+#2 [internal] load metadata for docker.io/library/python:3.11-slim
+#2 DONE 0.5s
+System.Management.Automation.RemoteException
+#3 [internal] load .dockerignore
+#3 transferring context: 628B done
+#3 DONE 0.0s
+System.Management.Automation.RemoteException
+#4 [builder 1/5] FROM docker.io/library/python:3.11-slim@sha256:9f6ef439f51f4b36dc5c6bb265c2d3dd810bde94c5bbec77ae86b6650c488cf9
+#4 DONE 0.0s
+System.Management.Automation.RemoteException
+#5 [internal] load build context
+#5 transferring context: 7.49kB 0.0s done
+#5 DONE 0.0s
+System.Management.Automation.RemoteException
+#6 [builder 2/5] WORKDIR /build
+#6 CACHED
+System.Management.Automation.RemoteException
+#7 [builder 3/5] COPY requirements.txt .
+#7 CACHED
+System.Management.Automation.RemoteException
+#8 [builder 4/5] RUN python -m venv /opt/venv
+#8 CACHED
+System.Management.Automation.RemoteException
+#9 [builder 5/5] RUN pip install --no-cache-dir -r requirements.txt
+#9 CACHED
+System.Management.Automation.RemoteException
+#10 [runtime 3/6] RUN groupadd --system app && useradd --system --gid app --uid 10001 app
+#10 CACHED
+System.Management.Automation.RemoteException
+#11 [runtime 2/6] WORKDIR /app
+#11 CACHED
+System.Management.Automation.RemoteException
+#12 [runtime 4/6] COPY --from=builder /opt/venv /opt/venv
+#12 CACHED
+System.Management.Automation.RemoteException
+#13 [runtime 5/6] COPY --chown=app:app app ./app
+#13 DONE 0.0s
+System.Management.Automation.RemoteException
+#14 [runtime 6/6] COPY --chown=app:app utils ./utils
+#14 DONE 0.0s
+System.Management.Automation.RemoteException
+#15 exporting to image
+#15 exporting layers 0.0s done
+#15 writing image sha256:9119412e966661a777e245f0f50e3a3f40934c95b223602ce63c940768f8421f done
+#15 naming to docker.io/library/day12-agent:prod done
+#15 DONE 0.1s
+System.Management.Automation.RemoteException
+View build details: docker-desktop://dashboard/build/default/default/shf0rgx4afufobkwstn3bwhmn
+System.Management.Automation.RemoteException
+What's Next?
+  View a summary of image vulnerabilities and recommendations → docker scout quickview

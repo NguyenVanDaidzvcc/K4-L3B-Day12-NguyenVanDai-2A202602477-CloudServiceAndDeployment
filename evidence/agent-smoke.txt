@@ -1,0 +1,10 @@
+﻿[2Kagent-1  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 41, "tokens_out": 45, "cost_usd": 3.315e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.219282+00:00"}
+[2Kagent-3  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 3, "tokens_out": 35, "cost_usd": 2.145e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.043855+00:00"}
+[2K[2Kagent-1  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 187, "tokens_out": 45, "cost_usd": 5.505e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.542178+00:00"}
+[2Kagent-1  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 334, "tokens_out": 45, "cost_usd": 7.71e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.720133+00:00"}
+[2K[2Kagent-2  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 90, "tokens_out": 45, "cost_usd": 4.05e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.459442+00:00"}
+[2Kagent-2  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 236, "tokens_out": 45, "cost_usd": 6.24e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.603708+00:00"}
+[2Kagent-3  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 139, "tokens_out": 45, "cost_usd": 4.785e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.481576+00:00"}
+[2Kagent-3  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 285, "tokens_out": 45, "cost_usd": 6.975e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.663323+00:00"}
+[2Kagent-2  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 383, "tokens_out": 45, "cost_usd": 8.445e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.782748+00:00"}
+[2Kagent-3  | {"user_id": "smoke-7736ccc1461e", "tokens_in": 432, "tokens_out": 45, "cost_usd": 9.18e-05, "event": "ask_completed", "level": "info", "timestamp": "2026-10-02T02:30:21.842712+00:00"}

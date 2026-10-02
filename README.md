@@ -1,3 +1,40 @@
+[![CI/CD](https://github.com/NguyenVanDaidzvcc/K4-L3B-Day12-NguyenVanDai-2A202602477-CloudServiceAndDeployment/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NguyenVanDaidzvcc/K4-L3B-Day12-NguyenVanDai-2A202602477-CloudServiceAndDeployment/actions/workflows/ci.yml)
+
+[Hướng dẫn thiết lập CI/CD](CI_CD.md)
+
+## Bài làm của Nguyễn Văn Đại — 2A202602477
+
+Trên Windows, dùng Python trong môi trường ảo của dự án để tránh thiếu thư viện:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pytest tests/ -v --ignore=tests/test_cp5.py -k "not test_badge_bao_passing" -m "not docker"
+```
+
+Chạy stack với Redis dùng chung, ba agent và Nginx ở cổng 8000:
+
+```powershell
+docker compose up -d --build --scale agent=3
+.\.venv\Scripts\python.exe scripts/smoke_check.py --output evidence/local-smoke.json
+```
+
+Script kiểm tra `/health`, `/ready`, auth, lịch sử và rate limit 10 request/phút;
+đọc khóa từ `.env` và không in khóa. Khi đổi số replica, khởi động lại proxy
+bằng `docker compose restart proxy` để Nginx cập nhật các IP backend.
+`Dockerfile.single` chỉ phục vụ so sánh dung lượng ở câu 3, không dùng deploy.
+
+Trước khi nộp, hoàn thiện [thông tin deploy](DEPLOYMENT.md), đọc và chỉnh
+[phiếu phản ánh](exercises.md) theo hiểu biết của mình, rồi chạy toàn bộ:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/ -v
+.\.venv\Scripts\python.exe grade.py
+```
+
+Tên repo cần đổi trên GitHub thành
+`K4-L3B-DAY12-NguyenVanDai-2A202602477-CloudServicesAndDeployment`.
+Sau đó cập nhật remote, link repo trong `DEPLOYMENT.md` và hai URL badge ở đầu README.
+
 # K4 — Level 3B, Ngày 12: Hạ Tầng Cloud & Deployment (240 phút)
 
 Đưa một AI agent từ `localhost:8000` lên một địa chỉ công khai mà người khác

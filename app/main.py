@@ -236,6 +236,7 @@ def ask(
     return {
         "answer": result["answer"],
         "user_id": user_id,
+        # Độ dài history trước lượt hỏi; mỗi lượt hoàn tất thêm 2 message.
         "history_length": len(history),
         "cost_usd": result["cost_usd"],
         "tokens": {

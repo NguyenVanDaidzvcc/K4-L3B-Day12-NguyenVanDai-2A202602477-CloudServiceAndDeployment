@@ -15,9 +15,7 @@
 #   docker compose ps
 #   pytest tests/test_cp2.py -v
 #
-# Bản này publish cổng cố định cho một agent.
-# Nếu muốn scale nhiều agent, cần chuyển cổng public sang
-# reverse proxy và bỏ mapping 8000:8000 trên từng agent.
+# Nginx giữ cổng public để có thể scale agent=3 mà không trùng cổng.
 
 services:
   redis:
@@ -40,8 +38,8 @@ services:
   agent:
     build: .
 
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
 
     environment:
       PORT: "8000"
@@ -72,6 +70,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  proxy:
+    image: nginx:stable-alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      agent:
+        condition: service_healthy
 
 volumes:
   redis-data:

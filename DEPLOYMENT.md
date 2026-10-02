@@ -10,9 +10,13 @@
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo K4-L3B-DAY12-HoVaTen-MSSV-CloudServicesAndDeployment) |
+| Họ và tên | Nguyễn Văn Đại |
+| Mã học viên | 2A202602477 |
+| Repo | https://github.com/NguyenVanDaidzvcc/K4-L3B-Day12-NguyenVanDai-2A202602477-CloudServiceAndDeployment |
+
+Tên repo hiện tại cần đổi thành
+`K4-L3B-DAY12-NguyenVanDai-2A202602477-CloudServicesAndDeployment` trước khi nộp;
+cập nhật link ở đây và badge README sau khi đổi tên trên GitHub.
 
 ## Service
 
@@ -28,12 +32,12 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 
 | Biến | Đã set | Ghi chú |
 |------|--------|---------|
-| `PORT` | ✅ | platform tự gán |
-| `AGENT_API_KEY` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
-| `RATE_LIMIT_PER_MINUTE` | ✅ | 10 |
-| `MONTHLY_BUDGET_USD` | ✅ | 10.0 |
-| `LOG_LEVEL` | ✅ | INFO |
+| `PORT` | Chưa xác minh | platform tự gán |
+| `AGENT_API_KEY` | Chưa xác minh | đặt trong dashboard, không nằm trong repo |
+| `REDIS_URL` | Chưa xác minh | (điền: Redis add-on của platform / Upstash / ...) |
+| `RATE_LIMIT_PER_MINUTE` | Chưa xác minh | dự kiến 10 |
+| `MONTHLY_BUDGET_USD` | Chưa xác minh | dự kiến 10.0 |
+| `LOG_LEVEL` | Chưa xác minh | dự kiến INFO |
 
 ## Lệnh Kiểm Tra
 
@@ -69,6 +73,23 @@ done; echo
 ```
 
 ## Kết Quả Chạy Thật
+
+### Đã kiểm tra tại máy (chưa phải cloud)
+
+Stack Nginx + 3 agent + Redis đã chạy và kiểm tra ngày 2026-10-02:
+
+- `http://localhost:8000/health`: 200, `status=ok`.
+- `/ready`: 200, `redis=true`.
+- `/ask` không key: 401.
+- Cùng user, 10 request có key: 200; 5 request tiếp theo: 429.
+- `history_length`: `0, 2, 4, 6, 8, 10, 12, 14, 16, 18`.
+
+Output: [lần đầu](evidence/local-smoke.json),
+[sau khi chuyển Docker](evidence/local-smoke-after-move.json).
+Ảnh: [health local](screenshots/health-local.png).
+Chưa chọn phương án fallback thay cho cloud; URL công khai vẫn cần bổ sung.
+
+### Kết quả cloud còn cần bổ sung
 
 Dán output của các lệnh trên vào đây:
 
